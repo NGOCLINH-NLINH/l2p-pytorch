@@ -140,6 +140,9 @@ def main(args):
     total_time_str = str(datetime.timedelta(seconds=int(total_time)))
     print(f"Total training time: {total_time_str}")
 
+    from utils import measure_l2p_throughput
+    measure_l2p_throughput(model, data_loader, device)
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser('L2P training and evaluation configs')
     config = parser.parse_known_args()[-1][0]

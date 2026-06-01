@@ -150,6 +150,21 @@ def get_dataset(dataset, transform_train, transform_val, args,):
     elif dataset == 'Imagenet-R':
         dataset_train = Imagenet_R(args.data_path, train=True, download=True, transform=transform_train).data
         dataset_val = Imagenet_R(args.data_path, train=False, download=True, transform=transform_val).data
+
+    elif dataset == 'Aircraft':
+        dataset_train = datasets.FGVCAircraft(args.data_path, split='trainval', download=True,
+                                              transform=transform_train)
+        dataset_val = datasets.FGVCAircraft(args.data_path, split='test', download=True, transform=transform_val)
+        dataset_train.targets = dataset_train._labels
+        dataset_val.targets = dataset_val._labels
+        dataset_val.classes = list(range(100))
+
+    elif dataset == 'GTSRB':
+        dataset_train = datasets.GTSRB(args.data_path, split='train', download=True, transform=transform_train)
+        dataset_val = datasets.GTSRB(args.data_path, split='test', download=True, transform=transform_val)
+        dataset_train.targets = [sample[1] for sample in dataset_train._samples]
+        dataset_val.targets = [sample[1] for sample in dataset_val._samples]
+        dataset_val.classes = list(range(43))
     
     else:
         raise ValueError('Dataset {} not found.'.format(dataset))
@@ -158,7 +173,7 @@ def get_dataset(dataset, transform_train, transform_val, args,):
 
 def split_single_dataset(dataset_train, dataset_val, args):
     nb_classes = len(dataset_val.classes)
-    assert nb_classes % args.num_tasks == 0
+    # assert nb_classes % args.num_tasks == 0
     classes_per_task = nb_classes // args.num_tasks
 
     labels = [i for i in range(nb_classes)]
@@ -172,9 +187,12 @@ def split_single_dataset(dataset_train, dataset_val, args):
     for _ in range(args.num_tasks):
         train_split_indices = []
         test_split_indices = []
-        
-        scope = labels[:classes_per_task]
-        labels = labels[classes_per_task:]
+
+        if _ == args.num_tasks - 1:
+            scope = labels
+        else:
+            scope = labels[:classes_per_task]
+            labels = labels[classes_per_task:]
 
         mask.append(scope)
 

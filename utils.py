@@ -18,6 +18,7 @@ import math
 from collections import defaultdict, deque
 import datetime
 
+import numpy as np
 import torch
 import torch.distributed as dist
 
@@ -242,3 +243,42 @@ def init_distributed_mode(args):
                                          world_size=args.world_size, rank=args.rank)
     torch.distributed.barrier()
     setup_for_distributed(args.rank == 0)
+
+
+def measure_l2p_throughput(model, data_loader_list, device):
+    print("\n" + "=" * 50)
+    print("[L2P] START COMPUTING INFERENCE THROUGHPUT...")
+    model.eval()
+
+    dummy_input = torch.randn(16, 3, 224, 224).to(device)
+    with torch.no_grad():
+        for _ in range(10):
+            _ = model(dummy_input, task_id=0)  # L2P forward
+
+    starter, ender = torch.cuda.Event(enable_timing=True), torch.cuda.Event(enable_timing=True)
+    timings = []
+    total_images = 0
+
+    with torch.no_grad():
+        for task_idx in range(len(data_loader_list)):
+            val_loader = data_loader_list[task_idx]['val']
+            for inputs, _ in val_loader:
+                inputs = inputs.to(device, non_blocking=True)
+                total_images += inputs.size(0)
+
+                torch.cuda.synchronize()
+                starter.record()
+
+                _ = model(inputs, task_id=0)
+
+                ender.record()
+                torch.cuda.synchronize()
+                timings.append(starter.elapsed_time(ender))
+
+    total_time_ms = np.sum(timings)
+    if total_time_ms > 0:
+        throughput = (total_images / total_time_ms) * 1000
+        print(f"Tổng số ảnh test : {total_images} ảnh")
+        print(f"Tổng thời gian   : {total_time_ms / 1000:.3f} giây")
+        print(f"THROUGHPUT       : {throughput:.2f} images/sec")
+    print("=" * 50 + "\n")

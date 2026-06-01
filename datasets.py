@@ -152,6 +152,7 @@ def get_dataset(dataset, transform_train, transform_val, args,):
         dataset_val = Imagenet_R(args.data_path, train=False, download=True, transform=transform_val).data
 
     elif dataset == 'Aircraft':
+        print('AIRCRAFT dataset is used.')
         dataset_train = datasets.FGVCAircraft(args.data_path, split='trainval', download=True,
                                               transform=transform_train)
         dataset_val = datasets.FGVCAircraft(args.data_path, split='test', download=True, transform=transform_val)
@@ -160,6 +161,7 @@ def get_dataset(dataset, transform_train, transform_val, args,):
         dataset_val.classes = list(range(100))
 
     elif dataset == 'GTSRB':
+        print('GTSRB dataset is used.')
         dataset_train = datasets.GTSRB(args.data_path, split='train', download=True, transform=transform_train)
         dataset_val = datasets.GTSRB(args.data_path, split='test', download=True, transform=transform_val)
         dataset_train.targets = [sample[1] for sample in dataset_train._samples]

@@ -42,8 +42,10 @@ def main(args):
 
     cudnn.benchmark = True
 
+    print("1")
     data_loader, class_mask = build_continual_dataloader(args)
 
+    print("2")
     print(f"Creating original model: {args.model}")
     original_model = create_model(
         args.model,
@@ -53,6 +55,7 @@ def main(args):
         drop_path_rate=args.drop_path,
         drop_block_rate=None,
     )
+    print("3")
 
     print(f"Creating model: {args.model}")
     model = create_model(

@@ -30,7 +30,8 @@ import warnings
 warnings.filterwarnings('ignore', 'Argument interpolation should be of type InterpolationMode instead of int')
 
 def main(args):
-    utils.init_distributed_mode(args)
+    # utils.init_distributed_mode(args)
+    args.distributed = False
 
     device = torch.device(args.device)
 

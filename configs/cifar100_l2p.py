@@ -74,6 +74,10 @@ def get_args_parser(subparsers):
     subparsers.add_argument('--train_mask', default=True, type=bool, help='if using the class mask at training')
     subparsers.add_argument('--task_inc', default=False, type=bool, help='if doing task incremental')
 
+    # --- THÊM 2 DÒNG NÀY CHO ER ---
+    subparsers.add_argument('--buffer_size', default=1000, type=int)
+    subparsers.add_argument('--rehearsal_batch_size', default=32, type=int)
+
     # Prompt parameters
     subparsers.add_argument('--prompt_pool', default=True, type=bool,)
     subparsers.add_argument('--size', default=10, type=int,)

@@ -29,7 +29,8 @@ import utils
 def train_one_epoch(model: torch.nn.Module, original_model: torch.nn.Module, 
                     criterion, data_loader: Iterable, optimizer: torch.optim.Optimizer,
                     device: torch.device, epoch: int, max_norm: float = 0,
-                    set_training_mode=True, task_id=-1, class_mask=None, args = None,):
+                    set_training_mode=True, task_id=-1, class_mask=None, args = None,
+                    memory_buffer=None):
 
     model.train(set_training_mode)
     original_model.eval()
@@ -46,6 +47,14 @@ def train_one_epoch(model: torch.nn.Module, original_model: torch.nn.Module,
         input = input.to(device, non_blocking=True)
         target = target.to(device, non_blocking=True)
 
+        current_task_ids = torch.full((input.shape[0],), task_id, dtype=torch.long).to(device)
+        if memory_buffer is not None and len(memory_buffer.x) > 0 and task_id > 0:
+            mem_x, mem_y, mem_tid = memory_buffer.get_random_batch(args.rehearsal_batch_size)
+            if mem_x is not None:
+                input = torch.cat([input, mem_x], dim=0)
+                target = torch.cat([target, mem_y], dim=0)
+                current_task_ids = torch.cat([current_task_ids, mem_tid], dim=0)
+
         with torch.no_grad():
             if original_model is not None:
                 output = original_model(input)
@@ -58,10 +67,14 @@ def train_one_epoch(model: torch.nn.Module, original_model: torch.nn.Module,
 
         # here is the trick to mask out classes of non-current tasks
         if args.train_mask and class_mask is not None:
-            mask = class_mask[task_id]
-            not_mask = np.setdiff1d(np.arange(args.nb_classes), mask)
-            not_mask = torch.tensor(not_mask, dtype=torch.int64).to(device)
-            logits = logits.index_fill(dim=1, index=not_mask, value=float('-inf'))
+            logits_mask = torch.ones_like(logits) * float('-inf')
+            for i_task in torch.unique(current_task_ids):
+                i_task_val = i_task.item()
+                valid_classes = class_mask[i_task_val]
+                batch_idx = (current_task_ids == i_task_val).nonzero(as_tuple=True)[0]
+                for c in valid_classes:
+                    logits_mask[batch_idx, c] = 0.0
+            logits = logits + logits_mask
 
         loss = criterion(logits, target) # base criterion (CrossEntropyLoss)
         if args.pull_constraint and 'reduce_sim' in output:
@@ -174,7 +187,7 @@ def evaluate_till_now(model: torch.nn.Module, original_model: torch.nn.Module, d
 
 def train_and_evaluate(model: torch.nn.Module, model_without_ddp: torch.nn.Module, original_model: torch.nn.Module, 
                     criterion, data_loader: Iterable, optimizer: torch.optim.Optimizer, lr_scheduler, device: torch.device, 
-                    class_mask=None, args = None,):
+                    class_mask=None, args = None, memory_buffer=None):
 
     # create matrix to save end-of-task accuracies 
     acc_matrix = np.zeros((args.num_tasks, args.num_tasks))
@@ -232,10 +245,16 @@ def train_and_evaluate(model: torch.nn.Module, model_without_ddp: torch.nn.Modul
             train_stats = train_one_epoch(model=model, original_model=original_model, criterion=criterion, 
                                         data_loader=data_loader[task_id]['train'], optimizer=optimizer, 
                                         device=device, epoch=epoch, max_norm=args.clip_grad, 
-                                        set_training_mode=True, task_id=task_id, class_mask=class_mask, args=args,)
+                                        set_training_mode=True, task_id=task_id, class_mask=class_mask, args=args, memory_buffer=memory_buffer)
             
             if lr_scheduler:
                 lr_scheduler.step(epoch)
+
+        if memory_buffer is not None:
+            print(f"\n[Buffer] Đang trích xuất dữ liệu của Task {task_id + 1} vào Buffer...")
+            for input_mem, target_mem in data_loader[task_id]['train']:
+                memory_buffer.add_data(input_mem, target_mem, task_id)
+            print(f"[Buffer] Tổng số ảnh hiện tại trong Pool: {memory_buffer.num_seen_examples} (Max: {args.buffer_size})")
 
         test_stats = evaluate_till_now(model=model, original_model=original_model, data_loader=data_loader, device=device, 
                                     task_id=task_id, class_mask=class_mask, acc_matrix=acc_matrix, args=args)

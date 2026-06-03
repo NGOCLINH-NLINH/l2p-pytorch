@@ -20,6 +20,7 @@ from pathlib import Path
 from timm.models import create_model
 from timm.scheduler import create_scheduler
 from timm.optim import create_optimizer
+from buffer import ReservoirBuffer
 
 from datasets import build_continual_dataloader
 from engine import *
@@ -133,12 +134,14 @@ def main(args):
 
     criterion = torch.nn.CrossEntropyLoss().to(device)
 
+    memory_buffer = ReservoirBuffer(args.buffer_size, device)
+
     print(f"Start training for {args.epochs} epochs")
     start_time = time.time()
 
     train_and_evaluate(model, model_without_ddp, original_model,
-                    criterion, data_loader, optimizer, lr_scheduler,
-                    device, class_mask, args)
+                       criterion, data_loader, optimizer, lr_scheduler,
+                       device, class_mask, args, memory_buffer=memory_buffer)
 
     total_time = time.time() - start_time
     total_time_str = str(datetime.timedelta(seconds=int(total_time)))
